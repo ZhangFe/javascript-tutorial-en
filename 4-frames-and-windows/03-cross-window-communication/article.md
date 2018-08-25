@@ -6,24 +6,25 @@ The idea is that if we have two windows open: one from `john-smith.com`, and ano
 
 ## Same Origin [#same-origin]
 
-Two URLs are said to have the "same origin" if they have the same protocol, domain and port.
+如果两个 URL 具有相同的协议，域名和端口，则称他们是"同源"的。
 
-These URLs all share the same origin:
+以下的几个 URL 都是同源的:
 
 - `http://site.com`
 - `http://site.com/`
 - `http://site.com/my/page.html`
 
-These ones do not:
+但是下面几个不是:
 
-- <code>http://<b>www.</b>site.com</code> (another domain: `www.` matters)
-- <code>http://<b>site.org</b></code> (another domain: `.org` matters)
-- <code><b>https://</b>site.com</code> (another protocol: `https`)
-- <code>http://site.com:<b>8080</b></code> (another port: `8080`)
+- <code>http://<b>www.</b>site.com</code> (`www.` 域名与其他不同)
+- <code>http://<b>site.org</b></code> (`.org` 域名与其他不同)
+- <code><b>https://</b>site.com</code> (协议与其他不同: `https`)
+- <code>http://site.com:<b>8080</b></code> (端口与其他不同: `8080`)
 
-If we have a reference to another window (a popup or iframe), and that window comes from the same origin, then we can do everything with it.
+如果我们有另外一个窗口（一个弹出窗口或者 iframe）的引用，并且这个窗口是同源的，那么我们可以使用它做任何事情
 
 If it comes from another origin, then we can only change its location. Please note: not *read* the location, but *modify* it, redirect it to another place. That's safe, because the URL may contain sensitive parameters, so reading it from another origin is prohibited, but changing is not.
+如果它不是同源的，那么我们只能改变它的。这样是安全的，因为 URL 可能包含一些敏感的参数，
 
 Also such windows may exchange messages. Soon about that later.
 
@@ -243,29 +244,27 @@ Please note that nothing works. So the default set is really harsh:
 The purpose of the `"sandbox"` attribute is only to *add more* restrictions. It cannot remove them. In particular, it can't relax same-origin restrictions if the iframe comes from another origin.
 ```
 
-## Cross-window messaging
+## 跨窗口传递消息
 
-The `postMessage` interface allows windows to talk to each other no matter which origin they are from.
+通过 `postMessage` 这个接口，我们可以在不同源的窗口内进行通信。
 
-It has two parts.
+它有两个部分。
 
 ### postMessage
 
-The window that wants to send a message calls [postMessage](mdn:api/Window.postMessage) method of the receiving window. In other words, if we want to send the message to `win`, we should call  `win.postMessage(data, targetOrigin)`.
+想要发送消息的窗口需要调用接收窗口的 [postMessage](mdn:api/Window.postMessage) 方法来传递消息。换句话说，如果我们想把消息发送到 `win`，我们应该调用 `win.postMessage(data, targetOrigin)`。
 
-Arguments:
+这个接口有以下参数：
 
-`data`
-: The data to send. Can be any object, the data is cloned using the "structured cloning algorithm". IE supports only strings, so we should `JSON.stringify` complex objects to support that browser.
+`data`：要发送的数据。可以是任何对象，接口内部会使用"结构化克隆算法"将数据克隆一份。IE 只支持字符串，因此我们需要对复杂对象调用 `JSON.stringify` 以支持该浏览器
 
-`targetOrigin`
-: Specifies the origin for the target window, so that only a window from the given origin will get the message.
+`targetOrigin`：指定目标窗口的源，以确保只有来自指定源的窗口才能获得该消息。
 
-The `targetOrigin` is a safety measure. Remember, if the target window comes from another origin, we can't read it's `location`. So we can't be sure which site is open in the intended window right now: the user could navigate away.
+`targetOrigin` 是一种安全措施。请记住，如果目标窗口是非同源的，我们无法读取它的 `location`，因此我们就无法确认当前在预期的窗口中打开的是哪个站点：因为用户随时可以跳转走。
 
-Specifying `targetOrigin` ensures that the window only receives the data if it's still at that site. Good when the data is sensitive.
+指定 `targetOrigin` 可以确保窗口内指定的网站还存在时才会接收数据。在有敏感数据时非常重要。
 
-For instance, here `win` will only receive the message if it has a document from the origin `http://example.com`:
+举个例子：这里只有当 `win` 内的站点是 `http://example.com` 这个源时才会接收消息：
 
 ```html no-beautify
 <iframe src="http://example.com" name="example">
@@ -277,7 +276,7 @@ For instance, here `win` will only receive the message if it has a document from
 </script>
 ```
 
-If we don't want that check, we can set `targetOrigin` to `*`.
+如果我们不希望做这个检测，可以将 `targetOrigin` 设置为 `*`。
 
 ```html no-beautify
 <iframe src="http://example.com" name="example">
@@ -294,27 +293,24 @@ If we don't want that check, we can set `targetOrigin` to `*`.
 
 ### onmessage
 
-To receive a message, the target window should have a handler on the `message` event. It triggers when `postMessage` is called (and `targetOrigin` check is successful).
+为了接收消息，目标窗口应该在 `message` 事件上增加一个处理函数。当 `postMessage` 被调用时这个事件会被触发（并且 `targetOrigin` 检查成功）。
 
-The event object has special properties:
+这个事件的 event 对象有一些特殊属性：
 
-`data`
-: The data from `postMessage`.
+`data`：从 `postMessage` 传递来的数据。
 
-`origin`
-: The origin of the sender, for instance `http://javascript.info`.
+`origin`： 发送方的源，举个例子： `http://javascript.info`。
 
-`source`
-: The reference to the sender window. We can immediately `postMessage` back if we want.
+`source`： 对发送方窗口的引用。如果我们需要的话可以立即回复 `postMessage`。
 
-To assign that handler, we should use `addEventListener`, a short syntax `window.onmessage` does not work.
+为了处理这个事件，我们需要使用 `addEventListener`，简单使用 `window.onmessage` 不起作用。
 
-Here's an example:
+这里有一个例子：
 
 ```js
 window.addEventListener("message", function(event) {
   if (event.origin != 'http://javascript.info') {
-    // something from an unknown domain, let's ignore it
+    // 从未知源获取的消息，忽略它
     return;
   }
 
@@ -322,12 +318,12 @@ window.addEventListener("message", function(event) {
 });
 ```
 
-The full example:
+这里有完整的示例：
 
 [codetabs src="postmessage" height=120]
 
 ```smart header="There's no delay"
-There's totally no delay between `postMessage` and the `message` event. That happens synchronously, even faster than `setTimeout(...,0)`.
+`postMessage` 和 `message` 事件之间完全没有延迟。他们是同步的，甚至比 `setTimeout(...,0)` 还要快。
 ```
 
 ## Summary
